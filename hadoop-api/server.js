@@ -82,7 +82,7 @@ function handleFileUpload(filename, res) {
                     return res.status(500).send(readError);
                 }
 
-                res.send({ data: outputData.replaceAll("\n", "<br>") });
+                res.send({ data: buildData(outputData) });
 
                 cleanUpOutput((cleanupError) => {
                     if (cleanupError) {
@@ -175,6 +175,19 @@ function cleanUpOutput(callback) {
         }
         callback(null);
     });
+}
+
+function buildData(data) {
+    const lines = data.replaceAll("\n", "<br>").split('<br>');
+
+    const response = lines.map((item) => {
+        const [name, count] = item.split('\t');
+        return {
+            name: name ? name.replace(/&c/g, '').replace(/[^\w\s]/g, '').trim() : null,
+            count: count ? parseInt(count, 10) : null
+        };
+    }).filter((item) => item.name && !isNaN(item.count)); 
+    return response.sort((a, b) => b.count - a.count);
 }
 
 app.listen(port, () => {

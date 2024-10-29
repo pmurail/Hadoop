@@ -1,11 +1,14 @@
-import React, {useState} from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
-import './FileUpload.css'; // Importer le fichier CSS pour le style
+import { Button, TextField, Typography, Container, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TablePagination, CircularProgress, Backdrop } from '@mui/material';
 
 const FileUpload: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
-    const [nbParGroupe, setNbParGroupe] = useState<number>(10); // Valeur par défaut
-    const [results, setResults] = useState<{ name: string; count: number }[]>([]); // État pour stocker les résultats
+    const [nbParGroupe, setNbParGroupe] = useState<number>(10);
+    const [results, setResults] = useState<{ name: string; count: number }[]>([]);
+    const [page, setPage] = useState<number>(0);
+    const [rowsPerPage, setRowsPerPage] = useState<number>(100);
+    const [loading, setLoading] = useState<boolean>(false); // État pour le chargement
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
@@ -26,13 +29,12 @@ const FileUpload: React.FC = () => {
 
         const formData = new FormData();
         formData.append('file', file);
+        setLoading(true); // Démarrer le chargement
 
         try {
             let response;
 
-            // Vérifier si nbParGroupe est égal à 0
             if (nbParGroupe === 0) {
-                // Appeler l'endpoint /first
                 response = await axios.post('http://localhost:3000/first', formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data',
@@ -47,66 +49,88 @@ const FileUpload: React.FC = () => {
                 });
             }
 
-            console.log(response.data); // Afficher le résultat dans la console
-
-            // Traiter la réponse pour créer un tableau d'objets
-            const data = response.data.data.split('<br>').map((item: { split: (arg0: string) => [any, any]; }) => {
-                const [name, count] = item.split('\t');
-                return {
-                    name: name.replace(/&c/g, '').replace(/[^\w\s]/g, '').trim(), // Enlever les caractères spéciaux
-                    count: parseInt(count, 10)
-                };
-            }).filter((item: { name: any; count: number; }) => item.name && !isNaN(item.count)); // Filtrer les entrées vides
-
-            // Trier les résultats par nombre d'occurrences (du plus grand au plus petit)
-            data.sort((a: { count: number; }, b: { count: number; }) => b.count - a.count);
-
+            const data = response.data.data; // Utiliser directement l'objet retourné
             setResults(data); // Mettre à jour l'état avec les résultats
+            setPage(0); // Réinitialiser la page à 0 lors de la soumission
         } catch (error) {
             console.error("Erreur lors de l'envoi du fichier :", error);
+        } finally {
+            setLoading(false); // Arrêter le chargement
         }
     };
 
+    const handleChangePage = (event: unknown, newPage: number) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0); // Réinitialiser à la première page lors du changement de nombre de lignes par page
+    };
+
     return (
-        <div className="file-upload-container">
-            <h1>Télécharger un fichier</h1>
+        <Container maxWidth="sm" style={{ marginTop: '20px' }}>
+            <Typography variant="h4" component="h1" gutterBottom>
+                Télécharger un fichier
+            </Typography>
             <form onSubmit={handleSubmit}>
-                <div className="form-group">
-                    <label htmlFor="file">Choisissez un fichier :</label>
-                    <input type="file" id="file" onChange={handleFileChange}/>
-                </div>
-                <div className="form-group">
-                    <label htmlFor="nbParGroupe">Nombre par groupe :</label>
-                    <input
-                        type="number"
-                        id="nbParGroupe"
-                        value={nbParGroupe}
-                        onChange={handleNbParGroupeChange}
-                    />
-                </div>
-                <button type="submit">Envoyer</button>
+                <TextField
+                    type="file"
+                    onChange={handleFileChange}
+                    fullWidth
+                    margin="normal"
+                    variant="outlined"
+                />
+                <TextField
+                    type="number"
+                    label="Nombre par groupe"
+                    value={nbParGroupe}
+                    onChange={handleNbParGroupeChange}
+                    fullWidth
+                    margin="normal"
+                    variant="outlined"
+                />
+                <Button type="submit" variant="contained" color="primary" fullWidth>
+                    Envoyer
+                </Button>
             </form>
 
-            {/* Afficher les résultats dans un tableau */}
             {results.length > 0 && (
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Nom</th>
-                        <th>Nombre</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {results.map((result, index) => (
-                        <tr key={index}>
-                            <td>{result.name}</td>
-                            <td>{result.count}</td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
+                <TableContainer component={Paper} style={{ marginTop: '20px' }}>
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Nom</TableCell>
+                                <TableCell>Nombre</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {results.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((result, index) => (
+                                <TableRow key={index}>
+                                    <TableCell>{result.name}</TableCell>
+                                    <TableCell>{ result.count}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    <TablePagination
+                        rowsPerPageOptions={[100, 200, 500]}
+                        component="div"
+                        count={results.length}
+                        rowsPerPage={rowsPerPage}
+                        page={page}
+                        onPageChange={handleChangePage}
+                        onRowsPerPageChange={handleChangeRowsPerPage}
+                    />
+                </TableContainer>
             )}
-        </div>
+
+            {loading && (
+                <Backdrop open={loading} style={{ zIndex: 1, color: '#fff' }}>
+                    <CircularProgress color="inherit" />
+                </Backdrop>
+            )}
+        </Container>
     );
 };
 
